@@ -6,7 +6,7 @@ const sizeMap: Record<Size, number> = {
   lg: 56,
 }
 
-/** Знак «фокус осознанности»: сходящиеся кольца и центр — место внимания */
+/** Логотип «Место силы»: сходящиеся кольца и центр — место внимания */
 export function AppLogo({ size = 'md', className = '' }: { size?: Size; className?: string }) {
   const s = sizeMap[size]
   return (

@@ -24,6 +24,9 @@ export type AppSnapshot = {
   happy_profile: UserProfile
 }
 
+/** Версия ключа — при смене схемы можно сменить ключ и мигрировать отдельно */
+export const LOCAL_STORAGE_KEY = 'happy_app_snapshot_v1'
+
 const DEFAULT_CATEGORIES: Category[] = [
   { id: 'sport', name: 'Спорт', color: '#22c55e' },
   { id: 'supplements', name: 'БАДы', color: '#eab308' },
@@ -154,36 +157,76 @@ function normalize(raw: Partial<AppSnapshot>): AppSnapshot {
   }
 }
 
-export async function loadSnapshot(): Promise<AppSnapshot> {
-  const res = await fetch('/api/data')
-  if (!res.ok) {
-    let msg = res.statusText
-    try {
-      const j = (await res.json()) as { error?: string }
-      if (j.error) msg = j.error
-    } catch {
-      /* ignore */
-    }
-    throw new Error(msg)
+function readLocalStorage(): AppSnapshot | null {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY)
+    if (raw == null || raw.length < 2) return null
+    const parsed = JSON.parse(raw) as Partial<AppSnapshot>
+    return normalize(parsed)
+  } catch {
+    return null
   }
-  const raw = (await res.json()) as Partial<AppSnapshot>
-  return normalize(raw)
+}
+
+function writeLocalStorage(s: AppSnapshot): void {
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(s))
+}
+
+/** Одноразовая подтяжка из dev API (файл на диске) при пустом localStorage */
+async function tryMigrateFromDevApi(): Promise<AppSnapshot | null> {
+  if (!import.meta.env.DEV) return null
+  try {
+    const res = await fetch('/api/data')
+    if (!res.ok) return null
+    const raw = (await res.json()) as Partial<AppSnapshot>
+    const snap = normalize(raw)
+    writeLocalStorage(snap)
+    return snap
+  } catch {
+    return null
+  }
+}
+
+export async function loadSnapshot(): Promise<AppSnapshot> {
+  const fromLs = readLocalStorage()
+  if (fromLs) return fromLs
+
+  const migrated = await tryMigrateFromDevApi()
+  if (migrated) return migrated
+
+  return normalize({})
+}
+
+/** Зеркалирование в dev: PUT /api/data — ежедневный бэкап и защита от wipe в плагине */
+async function mirrorToDevApi(s: AppSnapshot): Promise<void> {
+  if (!import.meta.env.DEV) return
+  try {
+    const res = await fetch('/api/data', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(s),
+    })
+    if (!res.ok) {
+      let msg = res.statusText
+      try {
+        const j = (await res.json()) as { error?: string }
+        if (j.error) msg = j.error
+      } catch {
+        /* ignore */
+      }
+      console.warn('[happy-data] зеркало в файл dev не сохранилось (данные в localStorage в безопасности):', msg)
+    }
+  } catch (e) {
+    console.warn('[happy-data] зеркало в dev API недоступно:', e)
+  }
 }
 
 export async function saveSnapshot(s: AppSnapshot): Promise<void> {
-  const res = await fetch('/api/data', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(s),
-  })
-  if (!res.ok) {
-    let msg = res.statusText
-    try {
-      const j = (await res.json()) as { error?: string }
-      if (j.error) msg = j.error
-    } catch {
-      /* ignore */
-    }
-    throw new Error(msg)
+  try {
+    writeLocalStorage(s)
+  } catch (e) {
+    console.error('localStorage недоступен или переполнен', e)
+    throw e
   }
+  await mirrorToDevApi(s)
 }

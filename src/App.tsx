@@ -119,7 +119,7 @@ export default function App() {
                 <AppLogo size="md" className="shrink-0" />
                 <div className="min-w-0 text-left leading-tight">
                   <div className="text-base font-semibold text-zinc-100 group-hover:text-amber-500/95">
-                    Место осознанности
+                    Место силы
                   </div>
                   <div className="text-xs text-zinc-500">цифровой дневник состояния</div>
                 </div>

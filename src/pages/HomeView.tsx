@@ -67,7 +67,7 @@ export function HomeView() {
           <AppLogo size="lg" className="shrink-0 drop-shadow-lg" />
           <div className="space-y-3">
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-50 sm:text-3xl">
-              Место осознанности
+              Место силы
             </h1>
             <p className="max-w-2xl text-sm leading-relaxed text-zinc-400 sm:text-base">
               Приложение для мягкого отслеживания состояния, мыслей и действий — без геймификации ради одних

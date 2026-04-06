@@ -20,7 +20,7 @@ alwaysApply: false
 - `happy_section_stats` — визиты и взаимодействия по `SECTION_IDS`
 - `happy_profile` — профиль, XP, инвентарь, очереди модалок
 
-**Клиент всегда** читает/пишет через `loadSnapshot()` / `saveSnapshot()` (HTTP **GET/PUT `/api/data`**). Не хардкодить путь к файлу в React-коде — только в плагине.
+**Клиент** читает/пишет через `loadSnapshot()` / `saveSnapshot()`: **localStorage** (`LOCAL_STORAGE_KEY`). В **dev** при пустом хранилище — одноразовый `GET /api/data` (миграция с файла); при каждом `saveSnapshot` — запись в LS и **зеркало** `PUT /api/data` для бэкапов. В **production** только браузер.
 
 ## Функция `normalize(raw)`
 
@@ -34,7 +34,7 @@ alwaysApply: false
 
 - **Начальное состояние** — пустые массивы / дефолты; реальные данные только после `load()`.
 - **`dataReady: true`** выставляется после попытки загрузки (в т.ч. при ошибке), чтобы не блокировать UI вечно.
-- **`hydratedFromServer: true`** только при успешном `loadSnapshot`. Пока `false`, **`recordSectionVisit` не пишет** (защита от перезаписи статистики до гидрации).
+- **`hydratedFromServer: true`** после успешной загрузки снимка (`loadSnapshot`). Пока `false`, **`recordSectionVisit` не пишет** (защита до гидрации).
 - **`persist(get)`** собирает поля стора в `AppSnapshot` и вызывает `saveSnapshot`. Любое новое персистентное поле — добавить в деструктуризацию и в объект для `saveSnapshot`.
 
 ### Паттерн действия

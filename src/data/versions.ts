@@ -8,6 +8,14 @@ export interface AppVersionEntry {
 export const APP_VERSION_HISTORY: AppVersionEntry[] = [
   {
     date: '2026-04-05',
+    version: '0.11.0',
+    changes: [
+      'Продакшен: данные в localStorage; в dev при пустом хранилище — миграция из GET /api/data, при сохранении — зеркало в файл и прежние бэкапы',
+      'Название приложения: «Место силы»',
+    ],
+  },
+  {
+    date: '2026-04-05',
     version: '0.10.1',
     changes: ['Задачи: подзадачи в сворачиваемом блоке (по умолчанию скрыты)'],
   },
