@@ -1,0 +1,68 @@
+---
+description: Слой данных Happy — AppSnapshot, normalize, Zustand persist, плагин Vite /api/data
+globs: src/lib/appData.ts,src/store/**/*,vite-plugin-happy-data.ts,scripts/generate-app-data.mjs
+alwaysApply: false
+---
+
+# Данные и стор — детали
+
+## Снимок `AppSnapshot` (`src/lib/appData.ts`)
+
+Ключи JSON (префикс `happy_`):
+
+- `happy_entries` — записи дня (настроение, слоты времени)
+- `happy_categories` — категории
+- `happy_thoughts` — мысли
+- `happy_state_actions` — действия КС/СС/ДС
+- `happy_victory_entries`, `happy_victory_drafts` — победы
+- `happy_reward_tasks` — задачи с наградой (`RewardTask`, в т.ч. `hypothesisId` для ГДА)
+- `happy_hypotheses` — гипотезы и действия ГДА
+- `happy_section_stats` — визиты и взаимодействия по `SECTION_IDS`
+- `happy_profile` — профиль, XP, инвентарь, очереди модалок
+
+**Клиент всегда** читает/пишет через `loadSnapshot()` / `saveSnapshot()` (HTTP **GET/PUT `/api/data`**). Не хардкодить путь к файлу в React-коде — только в плагине.
+
+## Функция `normalize(raw)`
+
+- Приводит частичный/старый JSON к полному `AppSnapshot`: дефолты для отсутствующих полей, clamp чисел, миграции вида `minute ?? 0`.
+- После построения `hypotheses` — **очистка `rewardTasks.hypothesisId`**, если id гипотезы не существует (защита от «сирот»).
+- Категории: если массив пуст — подставляется набор `DEFAULT_CATEGORIES`.
+
+Любое новое поле в сущностях: **сначала** тип + **ветка в normalize**, иначе старые снимки сломаются или получат `undefined`.
+
+## Zustand (`useStore.ts`)
+
+- **Начальное состояние** — пустые массивы / дефолты; реальные данные только после `load()`.
+- **`dataReady: true`** выставляется после попытки загрузки (в т.ч. при ошибке), чтобы не блокировать UI вечно.
+- **`hydratedFromServer: true`** только при успешном `loadSnapshot`. Пока `false`, **`recordSectionVisit` не пишет** (защита от перезаписи статистики до гидрации).
+- **`persist(get)`** собирает поля стора в `AppSnapshot` и вызывает `saveSnapshot`. Любое новое персистентное поле — добавить в деструктуризацию и в объект для `saveSnapshot`.
+
+### Паттерн действия
+
+```ts
+set((s) => ({ /* новое состояние */, sectionStats: bumpInteraction(s.sectionStats, 'tasks') }))
+void persist(get)
+```
+
+Исключения: только чтение, или явно без persist (редко).
+
+### Уровень и XP
+
+- `profileWithXp` при росте `levelXp` добавляет уровни в `pendingCaseLevels` и `pendingTeacherLevels`.
+- Удаление сущностей с начисленным XP (например `VictoryEntry`, выполненная задача) — **вычитать** `levelXp` согласованно с тем, как начислялось.
+
+## Плагин `vite-plugin-happy-data.ts`
+
+- Обслуживает файл `src/data/app-data.json`.
+- **PUT**: перед записью — проверка «пустой снимок поверх непустого» → **409**, копия в `backups/blocked-wipe-*.json`; обход только **`?force=1`** (не использовать без запроса пользователя).
+- **Первое сохранение за календарный день** — копия в `backups/daily-YYYY-MM-DD.json`.
+- GET без файла — 404 с подсказкой про `npm run data:import`.
+
+## Скрипт `scripts/generate-app-data.mjs`
+
+- Собирает минимальный валидный снимок из `src/data.js` (entries, categories, thoughts) + пустые массивы для остального + дефолтный профиль.
+- При расширении схемы — обновить объект `payload`, чтобы новый клон репозитория получал консистентный JSON.
+
+## Типы (`store/types.ts`)
+
+Единый источник доменных интерфейсов. Утилиты времени (`formatTime`, `localDateFromTs`, …) рядом с типами — переиспользовать вместо дублирования.

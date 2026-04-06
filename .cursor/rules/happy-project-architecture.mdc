@@ -1,0 +1,87 @@
+---
+description: Карта проекта Happy — стек, папки, маршруты, паттерны UI и связь разделов
+alwaysApply: true
+---
+
+# Happy («Место осознанности») — архитектура и навигация
+
+## Стек
+
+- **React 19**, **TypeScript**, **Vite 7** (dev-сервер порт **5174** — см. `vite.config.ts`)
+- **react-router-dom** — маршрутизация
+- **Zustand** — глобальный стор (`src/store/useStore.ts`)
+- **Tailwind CSS** — утилитарные классы, тёмная тема: фон `zinc-900`, текст `zinc-100`, акценты **amber** (навигация, CTA), дополнительно violet/emerald/rose по смыслу
+- **Chart.js** + **react-chartjs-2** — графики (день, статистика)
+
+## Структура репозитория (важное)
+
+| Путь | Назначение |
+|------|------------|
+| `src/App.tsx` | Роуты, шапка (логотип + `HeaderProfile`), `<Nav />`, `RouteVisitTracker`, `LevelUpFlowHost` |
+| `src/main.tsx` | Точка входа, `StrictMode` |
+| `src/index.css` | Глобальные стили + Tailwind |
+| `src/pages/*` | Экраны разделов (один файл ≈ один маршрут или группа) |
+| `src/components/*` | Переиспользуемые блоки, модалки, графики |
+| `src/store/types.ts` | Все доменные типы и утилиты дат/времени |
+| `src/store/useStore.ts` | Zustand: состояние, действия, `persist` → `appData.saveSnapshot` |
+| `src/lib/appData.ts` | Тип `AppSnapshot`, **`normalize`**, `loadSnapshot` / `saveSnapshot` (fetch `/api/data`) |
+| `src/lib/sectionTelemetry.ts` | `SECTION_IDS`, `pathToSectionId`, `bumpVisit` / `bumpInteraction` |
+| `src/lib/stateLevel.ts`, `victoryStreak.ts`, `inventoryMerge.ts` | Уровни XP, победы, инвентарь персонажей |
+| `src/data/app-data.json` | Единственный источник правды на диске (снимок) |
+| `src/data/versions.ts` | История версий для UI (`APP_VERSION_HISTORY`) |
+| `src/data/characters.ts` | Персонажи / кейсы |
+| `vite-plugin-happy-data.ts` | Dev/Preview: middleware **GET/PUT `/api/data`**, бэкапы, защита от wipe |
+| `scripts/generate-app-data.mjs` | `npm run data:import` — сборка начального JSON из `src/data.js` |
+
+Подробности по данным и стору — в правиле **happy-data-and-store** (globs). Критичные ограничения по `app-data.json` — в **app-data-safety**. История релизов — **changelog** + правка `versions.ts`.
+
+## Маршруты (`src/App.tsx`)
+
+| Path | Компонент | Смысл |
+|------|-----------|--------|
+| `/` | `HomeView` | Обзор, карточки разделов |
+| `/day` | `DayView` | Почасовые записи настроения |
+| `/stats` | `StatsView` | Графики по периодам |
+| `/categories` | `CategoriesView` | Категории записей |
+| `/thoughts` | `ThoughtsView` | Мысли |
+| `/states` | `StatesView` | КС / СС / ДС |
+| `/tasks` | `TasksView` | Задачи с XP и качеством |
+| `/hypothesis` | `HypothesisView` | ГДА (гипотеза — действие — анализ) |
+| `/victory` | `VictoryDiaryView` | Дневник побед |
+| `/profile` | `ProfileLayout` → `ProfileMain` | Профиль, аватар, уровень |
+| `/profile/usage` | `ProfileUsageView` | Статистика заходов/действий по разделам |
+| `/profile/versions` | `VersionsView` | История версий (редирект с `/versions`) |
+
+**Шапка:** клик по бренду → `/`; **уровень/аватар** → `HeaderProfile` → `/profile`.
+
+## Учёт разделов (телеметрия)
+
+- `RouteVisitTracker` на каждый переход вызывает `recordSectionVisit` по `pathToSectionId(pathname)`.
+- Значимые действия в сторе обычно вызывают `bumpInteraction(sectionId)` для своего раздела.
+- Новый верхнеуровневый маршрут: добавить сегмент в `pathToSectionId` + при необходимости в `SECTION_IDS` / `SECTION_LABELS` (`sectionTelemetry.ts`).
+
+## Доменные связи (кратко)
+
+- **Задачи (`RewardTask`) и ГДА:** поле `hypothesisId` — одна сущность в двух UI; завершение и XP общие (`completeRewardTask`). См. `TasksView` + `HypothesisView`.
+- **Профиль:** `UserProfile` — `levelXp`, `characterInventory`, очереди `pendingCaseLevels` / `pendingTeacherLevels`, модалки через `LevelUpFlowHost`.
+- **Победы:** черновики `VictoryDraft` и записи `VictoryEntry` с XP за стрик (`victoryStreak`).
+
+## UI-конвенции
+
+- Формы и списки: `rounded-lg`, `border-zinc-700`, карточки `bg-zinc-800/50`.
+- Кнопки основного действия: `bg-amber-600`, текст тёмный `text-zinc-950`.
+- Модалки: фиксированный оверлей, `z-[100]` при необходимости (см. `TaskCompleteModal`).
+- Пользовательский текст на **русском**; в UI избегать символа § (плохо рендерится).
+
+## Чеклист: новая фича с данными
+
+1. Типы в `types.ts` → поля в `AppSnapshot` в `appData.ts` → ветка в **`normalize`** (с дефолтами для старых снимков).
+2. Стор: загрузка в `load`, сериализация в `persist`, действия с `void persist(get)`.
+3. При удалении сущностей — почистить внешние ссылки (как `hypothesisId` у задач при удалении гипотезы).
+4. Версия и пункты в `src/data/versions.ts` (см. правило changelog).
+
+## Сборка и проверка
+
+- `npm run dev` — разработка с API данных.
+- `npm run build` — прод-сборка в `dist/`.
+- Импорт начальных данных: `npm run data:import` (нужен актуальный `src/data.js` при использовании).
